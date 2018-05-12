@@ -1,0 +1,215 @@
+#! /usr/bin/env python
+
+# ---------------------------------------------------------------------- #
+#
+# Author: Clay Elmore
+# Date Started: September 28, 2017
+# Date Finished: 
+# Advisors: Dr. Jennifer Schaefer, Dr. William Schneider
+#
+# Description: 
+# This program will take in any .log gaussian output files in a given
+# folder and extract the final single point energy from these files as 
+# well as the raman frequencies and their activities.
+#
+# ---------------------------------------------------------------------- #
+
+# ---------------------------------------------------------------------- #
+# Libraries:
+import math
+import os
+import shutil
+
+# ---------------------------------------------------------------------- #
+# Step 1: Read in the data from the working directory.
+
+# get the cwd
+cwd=os.getcwd()
+
+# find all of the .log files that are in the directory and save their names
+allFiles=os.listdir(cwd)
+logFiles=[]
+for i in allFiles:
+	if '.log' in i:
+		logFiles.append(i)
+
+logFiles=sorted(logFiles, key=str.lower)
+
+# make it into a readable format
+count=0
+txtFiles=[]
+for i in logFiles:
+	txtName=logFiles[count][:-4]+'.txt'
+	txtFiles.append(txtName)
+	shutil.copyfile(cwd+'/'+logFiles[count],cwd+'/'+txtFiles[count])
+	count+=1
+
+# for each of the files that were found, read in the data
+logData=[]
+count=0
+for i in txtFiles:
+	data=open(logFiles[count],"r")
+	data=data.readlines()
+	logData.append(data)
+	count+=1
+# ---------------------------------------------------------------------- #
+
+# ---------------------------------------------------------------------- #
+# Step 2: Find all of the lines that have the SCF Done: phrase used and
+#   	  record the energy that was there
+
+# first find out how many lines there are for future usage
+numLines=[0 for i in logData]
+count=0
+for i in logData:
+	numLines[count]=len(logData[count])
+	count=+1
+
+# grab the energy when you hit "SCF Done" for the last time
+finalEnergies=[0 for i in logData]
+count=0
+for i in logData:
+	for energyLine in logData[count]:
+		if 'SCF Done:' in energyLine:
+			energyLine=energyLine[int(energyLine.index('=')):]
+			energyLine=energyLine[int(energyLine.index('-')):]
+			energyLine=energyLine[:energyLine.index(' ')]
+			finalEnergies[count]=energyLine
+	finalEnergies[count]=float(finalEnergies[count])
+	count+=1 
+# ---------------------------------------------------------------------- #
+
+# ---------------------------------------------------------------------- #
+# Step 3: Take out the raman frequencies.
+
+frequencies=[[] for i in logData] # to store the cm-1's
+count=0 # a helper for the loop
+numberHolder=[] # helper for holding numbers as strings
+
+numbers=['.'] # a helper for dealing with the strings
+for i in range(10): # make the number list
+	numbers.append(str(i))
+
+activityHold=''
+activityPosHold=[]
+
+for i in logData: # loop through each file
+	for ramanLine in logData[count]: # loop through each line in the file
+		if 'Frequencies --' in ramanLine: # take out the label
+			changeLine=ramanLine[(ramanLine.index('   ')+3):]
+			record=1
+			numberHolder=[]
+			activityPosHold=[]
+			for k in range(len(changeLine)-1): # loop through each character in the new line
+				if changeLine[k] in numbers: # keep the positions of all the numbers
+					numberHolder.append(k)
+			for j in range(len(numberHolder)-1): # loop through the positions of numbers
+				if j==max(range(len(numberHolder)-1)): # stop at the end
+					activityPosHold.append(numberHolder[j])
+					activityPosHold.append(numberHolder[j+1])
+					for m in range(len(activityPosHold)): # figure out the number based on positions
+						activityHold+=changeLine[activityPosHold[m]]
+					frequencies[count].append(float(activityHold)) # store the value
+					activityHold=''         # reset
+					activityPosHold=[]	    # reset
+				elif numberHolder[j]==(numberHolder[j+1]-1): # store positions
+					activityPosHold.append(numberHolder[j])
+				elif numberHolder[j]!=(numberHolder[j+1]-1): # stop for new number
+					activityPosHold.append(numberHolder[j])
+					for m in range(len(activityPosHold)): # same as in 'if' statement 
+						activityHold+=changeLine[activityPosHold[m]]
+					frequencies[count].append(float(activityHold))
+					activityHold=''
+					activityPosHold=[]
+	count+=1 
+# ---------------------------------------------------------------------- #
+
+# ---------------------------------------------------------------------- #
+# Step 3: Take out the raman activities.
+
+activities=[[] for i in logData] # to store the heights
+count=0 # a helper for the loop
+numberHolder=[] # helper for holding numbers as strings
+
+activityHold=''
+activityPosHold=[]
+
+for i in logData: # loop through each file
+	for ramanLine in logData[count]: # loop through each line in the file
+		if 'Raman Activ --' in ramanLine: # take out the label
+			changeLine=ramanLine[(ramanLine.index('   ')+3):]
+			record=1
+			numberHolder=[]
+			activityPosHold=[]
+			for k in range(len(changeLine)-1): # loop through each character in the new line
+				if changeLine[k] in numbers: # keep the positions of all the numbers
+					numberHolder.append(k)
+			for j in range(len(numberHolder)-1): # loop through the positions of numbers
+				if j==max(range(len(numberHolder)-1)): # stop at the end
+					activityPosHold.append(numberHolder[j])
+					activityPosHold.append(numberHolder[j+1])
+					for m in range(len(activityPosHold)): # figure out the number based on positions
+						activityHold+=changeLine[activityPosHold[m]]
+					activities[count].append(float(activityHold)) # store the value
+					activityHold=''         # reset
+					activityPosHold=[]	    # reset
+				elif numberHolder[j]==(numberHolder[j+1]-1): # store positions
+					activityPosHold.append(numberHolder[j])
+				elif numberHolder[j]!=(numberHolder[j+1]-1): # stop for new number
+					activityPosHold.append(numberHolder[j])
+					for m in range(len(activityPosHold)): # same as in 'if' statement 
+						activityHold+=changeLine[activityPosHold[m]]
+					activities[count].append(float(activityHold))
+					activityHold=''
+					activityPosHold=[]
+	count+=1 
+# ---------------------------------------------------------------------- #
+
+# ---------------------------------------------------------------------- #
+# Step 4: Output the energies and raman stuff from step 3 into a text file  
+# 		  and remove the text files that were used.
+
+# start my extracting what methods and bases were used in the folder
+methods=[]
+bases=[]
+methodHold=''
+basisHold=''
+for name in logFiles:
+	methodHold=name[:name.index('_')]
+	if methodHold in methods:
+		a=1
+	else:
+		methods.append(methodHold)
+	basisHold=name[(name.index('_')+1):name.index('.')]
+	if basisHold in bases:
+		a=1
+	else:
+		bases.append(basisHold)
+
+# now write the output
+output=open('folderData.csv','w+')
+
+output.write("Working Directory: %s \n\n" % cwd)
+output.write("Energy in Hartrees:\n\n")
+output.write("Name")
+for i in bases:
+	output.write(',%s' % i)
+output.write('\n')
+
+count=0
+for i in methods:
+	output.write("%s" % i)
+	for j in bases:
+		output.write(',%f' % finalEnergies[count])
+		count+=1
+	output.write("\n")
+
+for i in txtFiles:
+	os.remove(i)
+
+# ---------------------------------------------------------------------- #
+
+
+
+
+

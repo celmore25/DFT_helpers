@@ -1,0 +1,337 @@
+#! /usr/bin/env python
+# ---------------------------------------------------------------------- #
+#
+# Author: Clay Elmore
+# Date Started: October 14, 2017
+# Date Finished: October 20, 2017
+# Advisors: Dr. Jennifer Schaefer, Dr. William Schneider
+#
+# Description: 
+# This program will go through every folder that exists in a folder and
+# perform the csvE command on each one. After this, it will make a master
+# CSV file that will contain all of the predictive data. Note: as of now,
+# this file is only compatible for the extraction of binding energies.
+# raman intensity extraction is built into the functional capability, but
+# it does not actually write it into the output right now. 
+#
+# ---------------------------------------------------------------------- #
+
+# ---------------------------------------------------------------------- #
+# Libraries:
+import math
+import os
+import shutil
+
+# ---------------------------------------------------------------------- #
+# ---------------------------------------------------------------------- #
+# ---------------------------------------------------------------------- #
+# ---------------------------------------------------------------------- #
+# ---------------------------------------------------------------------- #
+# Define the function that will do all of the actual extraction
+
+# find all of the .log files that are in the directory and save their names
+def csvE(cwd):
+	allFiles=os.listdir(cwd)
+	logFiles=[]
+	for i in allFiles:
+		if '.log' in i:
+			logFiles.append(i)
+
+	logFiles=sorted(logFiles, key=str.lower)
+
+	# make it into a readable format
+	count=0
+	txtFiles=[]
+	for i in logFiles:
+		txtName=logFiles[count][:-4]+'.txt'
+		txtFiles.append(txtName)
+		shutil.copyfile(cwd+'/'+logFiles[count],cwd+'/'+txtFiles[count])
+		count+=1
+
+	# for each of the files that were found, read in the data
+	logData=[]
+	count=0
+	for i in txtFiles:
+		data=open(cwd+'/'+logFiles[count],"r")
+		data=data.readlines()
+		logData.append(data)
+		count+=1
+	# ---------------------------------------------------------------------- #
+
+	# ---------------------------------------------------------------------- #
+	# Step 2: Find all of the lines that have the SCF Done: phrase used and
+	#   	  record the energy that was there
+
+	# first find out how many lines there are for future usage
+	numLines=[0 for i in logData]
+	count=0
+	for i in logData:
+		numLines[count]=len(logData[count])
+		count=+1
+
+	# grab the energy when you hit "SCF Done" for the last time
+	finalEnergies=[0 for i in logData]
+	count=0
+	for i in logData:
+		for energyLine in logData[count]:
+			if 'SCF Done:' in energyLine:
+				energyLine=energyLine[int(energyLine.index('=')):]
+				energyLine=energyLine[int(energyLine.index('-')):]
+				energyLine=energyLine[:energyLine.index(' ')]
+				finalEnergies[count]=energyLine
+		finalEnergies[count]=float(finalEnergies[count])
+		count+=1 
+	# ---------------------------------------------------------------------- #
+
+	# ---------------------------------------------------------------------- #
+	# Step 3: Take out the raman frequencies.
+
+	frequencies=[[] for i in logData] # to store the cm-1's
+	count=0 # a helper for the loop
+	numberHolder=[] # helper for holding numbers as strings
+
+	numbers=['.'] # a helper for dealing with the strings
+	for i in range(10): # make the number list
+		numbers.append(str(i))
+
+	activityHold=''
+	activityPosHold=[]
+
+	for i in logData: # loop through each file
+		for ramanLine in logData[count]: # loop through each line in the file
+			if 'Frequencies --' in ramanLine: # take out the label
+				changeLine=ramanLine[(ramanLine.index('   ')+3):]
+				record=1
+				numberHolder=[]
+				activityPosHold=[]
+				for k in range(len(changeLine)-1): # loop through each character in the new line
+					if changeLine[k] in numbers: # keep the positions of all the numbers
+						numberHolder.append(k)
+				for j in range(len(numberHolder)-1): # loop through the positions of numbers
+					if j==max(range(len(numberHolder)-1)): # stop at the end
+						activityPosHold.append(numberHolder[j])
+						activityPosHold.append(numberHolder[j+1])
+						for m in range(len(activityPosHold)): # figure out the number based on positions
+							activityHold+=changeLine[activityPosHold[m]]
+						frequencies[count].append(float(activityHold)) # store the value
+						activityHold=''         # reset
+						activityPosHold=[]	    # reset
+					elif numberHolder[j]==(numberHolder[j+1]-1): # store positions
+						activityPosHold.append(numberHolder[j])
+					elif numberHolder[j]!=(numberHolder[j+1]-1): # stop for new number
+						activityPosHold.append(numberHolder[j])
+						for m in range(len(activityPosHold)): # same as in 'if' statement 
+							activityHold+=changeLine[activityPosHold[m]]
+						frequencies[count].append(float(activityHold))
+						activityHold=''
+						activityPosHold=[]
+		count+=1 
+	# ---------------------------------------------------------------------- #
+
+	# ---------------------------------------------------------------------- #
+	# Step 3: Take out the raman activities.
+
+	activities=[[] for i in logData] # to store the heights
+	count=0 # a helper for the loop
+	numberHolder=[] # helper for holding numbers as strings
+
+	activityHold=''
+	activityPosHold=[]
+
+	for i in logData: # loop through each file
+		for ramanLine in logData[count]: # loop through each line in the file
+			if 'Raman Activ --' in ramanLine: # take out the label
+				changeLine=ramanLine[(ramanLine.index('   ')+3):]
+				record=1
+				numberHolder=[]
+				activityPosHold=[]
+				for k in range(len(changeLine)-1): # loop through each character in the new line
+					if changeLine[k] in numbers: # keep the positions of all the numbers
+						numberHolder.append(k)
+				for j in range(len(numberHolder)-1): # loop through the positions of numbers
+					if j==max(range(len(numberHolder)-1)): # stop at the end
+						activityPosHold.append(numberHolder[j])
+						activityPosHold.append(numberHolder[j+1])
+						for m in range(len(activityPosHold)): # figure out the number based on positions
+							activityHold+=changeLine[activityPosHold[m]]
+						activities[count].append(float(activityHold)) # store the value
+						activityHold=''         # reset
+						activityPosHold=[]	    # reset
+					elif numberHolder[j]==(numberHolder[j+1]-1): # store positions
+						activityPosHold.append(numberHolder[j])
+					elif numberHolder[j]!=(numberHolder[j+1]-1): # stop for new number
+						activityPosHold.append(numberHolder[j])
+						for m in range(len(activityPosHold)): # same as in 'if' statement 
+							activityHold+=changeLine[activityPosHold[m]]
+						activities[count].append(float(activityHold))
+						activityHold=''
+						activityPosHold=[]
+		count+=1 
+	# ---------------------------------------------------------------------- #
+
+	# ---------------------------------------------------------------------- #
+	# Step 4: Output the energies and raman stuff from step 3 into a text file  
+	# 		  and remove the text files that were used.
+
+	# start my extracting what methods and bases were used in the folder
+	methods=[]
+	bases=[]
+	methodHold=''
+	basisHold=''
+	for name in logFiles:
+		methodHold=name[:name.index('_')]
+		if methodHold in methods:
+			a=1
+		else:
+			methods.append(methodHold)
+		basisHold=name[(name.index('_')+1):name.index('.')]
+		if basisHold in bases:
+			a=1
+		else:
+			bases.append(basisHold)
+
+	# now write the output
+	output=open(cwd+'/'+'folderData.csv','w+')
+
+	output.write("Working Directory: %s \n\n" % cwd)
+	output.write("Energy in Hartrees:\n\n")
+	output.write("Name")
+	for i in bases:
+		output.write(',%s' % i)
+	output.write('\n')
+
+
+	# this part is also going to make the output matrix called "bindingMatrix"
+	bindingMatrix=[[] for i in methods]
+	count=0
+	methodCount=0
+	basisCount=0
+	for i in methods:
+		output.write("%s" % i)
+		for j in bases:
+			output.write(',%f' % finalEnergies[count])
+			bindingMatrix[methodCount].append(finalEnergies[count])
+			count+=1
+			basisCount+=1
+		output.write("\n")
+		methodCount+=1
+
+	for i in txtFiles:
+		os.remove(cwd+'/'+i)
+
+	return(bindingMatrix, methods, bases)
+# ---------------------------------------------------------------------- #
+# ---------------------------------------------------------------------- #
+# ---------------------------------------------------------------------- #
+# ---------------------------------------------------------------------- #
+# ---------------------------------------------------------------------- #
+
+
+# ---------------------------------------------------------------------- #
+# Step 1: Run the csvE function in all the directories 
+
+# get the cwd
+cwd=os.getcwd()
+
+# get the directories and their names
+allFiles=os.listdir(cwd)
+allDirs=[]
+for i in allFiles:
+	if '.' not in i:
+		allDirs.append(i)
+
+# move the cwd into each of the molecules
+for i in allDirs:
+	cwd=cwd+'/'+i
+
+	# extract the directories from each of these directories
+	loopFiles=os.listdir(cwd)
+	loopDirs=[]
+	for j in loopFiles:
+		if '.' not in j:
+			loopDirs.append(j)
+
+	# for each of the "loopDirs", go in and execute the csvE function
+	for k in loopDirs:
+		csvE(cwd+'/'+k)
+
+	cwd=os.getcwd()
+
+# ---------------------------------------------------------------------- #
+# Step 2: Make a master csv file that has all of the information
+
+# create the file that will hold all of the info
+bindingFinal=open(cwd+'/'+'bindingData.csv','w+')
+
+# define a function to write each one of the data parts into the last file
+def writeBind(energies,methods,bases,cwd,file):
+	
+	charge=cwd[cwd.rfind('/')+1:]
+	file.write("%s" % charge)
+	for i in bases:
+		file.write(',%s' % i)
+	file.write('\n')
+
+	count=0
+	for i in range(len(methods)):
+		file.write("%s" % methods[i])
+		for j in range(len(bases)):
+			file.write(',%f' % energies[i][j])
+		file.write("\n")
+	file.write("\n")
+
+
+# get the cwd of the full folder
+cwd=os.getcwd()
+
+# get the directories and their names
+allFiles=os.listdir(cwd)
+allDirs=[]
+for i in allFiles:
+	if '.' not in i:
+		allDirs.append(i)
+
+# move the cwd into each of the molecules
+for i in allDirs:
+
+	cwd=cwd+'/'+i
+
+	molName=cwd[cwd.rfind('/')+1:]
+	bindingFinal.write("Molecule: %s\n\n" % molName)
+
+	# extract the directories from each of these directories
+	loopFiles=os.listdir(cwd)
+	loopDirs=[]
+	for j in loopFiles:
+		if '.' not in j:
+			loopDirs.append(j)
+
+	# for each of the "loopDirs", go in and grab each of the important values
+	for k in loopDirs:
+		if k =='anion':
+			anion,anionMethod,anionBases=csvE(cwd+'/'+k)
+			writeBind(anion,anionMethod,anionBases,cwd+'/'+k,bindingFinal)
+		if k =='cation': 
+			cation,catioMethod,cationBases=csvE(cwd+'/'+k)
+			writeBind(cation,catioMethod,cationBases,cwd+'/'+k,bindingFinal)
+		if k =='neutral': 
+			neutral,neutralMethod,neutralBases=csvE(cwd+'/'+k)
+			writeBind(neutral,neutralMethod,neutralBases,cwd+'/'+k,bindingFinal)
+
+	# calcule the dissociation energy matrix 
+
+	disEngery=[[] for i in anionMethod]
+	for l in range(len(anionMethod)):
+		for m in range(len(anionBases)):
+			singleE=(cation[l][m]+anion[l][m])-neutral[l][m]
+			disEngery[l].append(singleE)
+
+	# write the dissociation energy in
+	writeBind(disEngery,neutralMethod,neutralBases,cwd+'/'+'dissociation',bindingFinal)
+
+	# reset the cwd	
+	cwd=os.getcwd()
+
+	bindingFinal.write("\n")
+
+
